@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../services/api";
+import { useCart } from "../context/CartContext";
 
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
   const [error, setError] = useState("");
+const { addToCart } = useCart();
+const [added, setAdded] = useState(false);
 
   useEffect(() => {
     api
@@ -51,9 +54,17 @@ export default function ProductDetail() {
             </>
           )}
 
-          <button className="btn" disabled={product.stock === 0}>
-            Add to cart
-          </button>
+          <button
+  className="btn"
+  disabled={product.stock === 0}
+  onClick={() => {
+    addToCart(product);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  }}
+>
+  {added ? "Added " : "Add to cart"}
+</button>
         </div>
       </div>
     </div>
