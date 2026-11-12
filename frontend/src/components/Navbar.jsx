@@ -20,7 +20,8 @@ export default function Navbar() {
         <Link to="/cart">Cart ({totalItems})</Link>
         {user ? (
           <>
-          <Link to="/orders">My orders</Link>
+            {user.role === "admin" && <Link to="/admin">Admin</Link>}
+            <Link to="/orders">My orders</Link>
             <span>Hi, {user.name.split(" ")[0]}</span>
             <button className="link-btn light" onClick={handleLogout}>Logout</button>
           </>

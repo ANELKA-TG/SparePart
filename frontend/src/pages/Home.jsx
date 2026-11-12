@@ -10,6 +10,7 @@ export default function Home() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+const [categories, setCategories] = useState([]);
 
   useEffect(() => {
     // Wait 400ms after typing stops before calling the API
@@ -31,6 +32,10 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [search, category, page]);
 
+  useEffect(() => {
+  api.get("/products/categories").then(({ data }) => setCategories(data)).catch(() => {});
+}, []);
+
   return (
     <div className="container">
       <h1>Spare Parts</h1>
@@ -47,6 +52,9 @@ export default function Home() {
           onChange={(e) => { setCategory(e.target.value); setPage(1); }}
         >
           <option value="">All categories</option>
+{categories.map((c) => (
+  <option key={c} value={c}>{c}</option>
+))}
           <option value="Brakes">Brakes</option>
           <option value="Engine">Engine</option>
           <option value="Suspension">Suspension</option>

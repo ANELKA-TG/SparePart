@@ -74,3 +74,13 @@ exports.deleteProduct = async (req, res) => {
     res.status(400).json({ message: "Invalid product ID" });
   }
 };
+
+// GET /api/products/categories
+exports.getCategories = async (req, res) => {
+  try {
+    const categories = await Product.distinct("category");
+    res.json(categories.sort());
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

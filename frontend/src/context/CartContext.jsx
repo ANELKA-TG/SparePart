@@ -1,19 +1,63 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 const CartContext = createContext();
 
-export function CartProvider({ children }) {
-  const [items, setItems] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("cart")) || [];
-    } catch {
-      return [];
-    }
-  });
+const GUEST_KEY = "cart_guest";
 
+const readCart = (key) => {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || [];
+  } catch {
+    return [];
+  }
+};
+
+// Combine two carts, summing quantities but never exceeding stock
+const mergeCarts = (base, extra) => {
+  const merged = base.map((i) => ({ ...i }));
+  for (const item of extra) {
+    const existing = merged.find((i) => i._id === item._id);
+    if (existing) {
+      existing.qty = Math.min(existing.qty + item.qty, existing.stock);
+    } else {
+      merged.push({ ...item });
+    }
+  }
+  return merged;
+};
+
+export function CartProvider({ children }) {
+  const { user } = useAuth();
+  const key = user ? `cart_${user._id}` : GUEST_KEY;
+
+  const [state, setState] = useState(() => ({ key, items: readCart(key) }));
+
+  // Switch carts when someone logs in or out
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(items));
-  }, [items]);
+    if (state.key === key) return;
+
+    let next = readCart(key);
+    // Items added while logged out are carried into the new user's cart
+    if (state.key === GUEST_KEY && user) {
+      next = mergeCarts(next, state.items);
+      localStorage.removeItem(GUEST_KEY);
+    }
+    setState({ key, items: next });
+  }, [key]);
+
+  // Save the cart whenever it changes
+  useEffect(() => {
+    localStorage.setItem(state.key, JSON.stringify(state.items));
+  }, [state]);
+
+  const items = state.items;
+
+  const setItems = (updater) =>
+    setState((prev) => ({
+      ...prev,
+      items: typeof updater === "function" ? updater(prev.items) : updater,
+    }));
 
   const addToCart = (product, qty = 1) => {
     setItems((prev) => {

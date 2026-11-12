@@ -63,6 +63,40 @@ textarea { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-famil
 .badge.cancelled { background: #fee2e2; color: #991b1b; }
 .btn.danger { background: #dc2626; }
 
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
+.admin-tabs a { padding: 10px 18px; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.admin-tabs a.active { border-bottom-color: #2563eb; font-weight: 700; color: #2563eb; }
+
+.admin-bar { display: flex; gap: 12px; margin-bottom: 16px; }
+.admin-bar input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+.admin-bar select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.table th, .table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+.table th { background: #f3f4f6; font-size: .85rem; }
+.table .actions { display: flex; gap: 14px; white-space: nowrap; }
+.table .actions a { color: #2563eb; }
+.low { color: #b91c1c; font-weight: 700; }
+.danger-text { color: #dc2626; }
+
+.form.wide { max-width: 760px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-2 input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+.compat-row { display: grid; grid-template-columns: 1.2fr 1.2fr .8fr .8fr auto; gap: 8px; align-items: center; }
+.compat-row input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; min-width: 0; }
+.btn.secondary { background: #4b5563; align-self: flex-start; }
+
+.admin-order { background: #fff; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.admin-order summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; cursor: pointer; list-style: none; }
+.admin-order summary::-webkit-details-marker { display: none; }
+.admin-order-body { padding: 0 14px 14px; border-top: 1px solid #eee; }
+
+@media (max-width: 700px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .compat-row { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 700px) { .checkout-grid { grid-template-columns: 1fr; } }
 
 @media (max-width: 700px) { .detail { grid-template-columns: 1fr; } }
