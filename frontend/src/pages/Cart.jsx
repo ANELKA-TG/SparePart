@@ -4,7 +4,9 @@ import { useCart } from "../context/CartContext";
 export default function Cart() {
   const { items, updateQty, removeFromCart, totalPrice } = useCart();
 
-  if (items.length === 0)
+  const validItems = items.filter((i) => i && i._id && typeof i.price === "number");
+
+  if (validItems.length === 0)
     return (
       <div className="container">
         <h1>Your cart</h1>
@@ -16,7 +18,7 @@ export default function Cart() {
   return (
     <div className="container">
       <h1>Your cart</h1>
-      {items.map((item) => (
+      {validItems.map((item) => (
         <div className="cart-row" key={item._id}>
           <div className="cart-info">
             <strong>{item.name}</strong>
@@ -24,8 +26,13 @@ export default function Cart() {
             <span>{item.price.toLocaleString()} FCFA</span>
           </div>
           <div className="cart-actions">
-            <input type="number" min="1" max={item.stock} value={item.qty}
-              onChange={(e) => updateQty(item._id, Number(e.target.value))} />
+            <input
+              type="number"
+              min="1"
+              max={item.stock}
+              value={item.qty}
+              onChange={(e) => updateQty(item._id, Number(e.target.value))}
+            />
             <span className="line-total">
               {(item.price * item.qty).toLocaleString()} FCFA
             </span>

@@ -3,9 +3,8 @@ import { useAuth } from "./AuthContext";
 
 const CartContext = createContext();
 
-const GUEST_KEY = "cart_guest";
-
 const readCart = (key) => {
+  if (!key) return [];
   try {
     return JSON.parse(localStorage.getItem(key)) || [];
   } catch {
@@ -13,42 +12,20 @@ const readCart = (key) => {
   }
 };
 
-// Combine two carts, summing quantities but never exceeding stock
-const mergeCarts = (base, extra) => {
-  const merged = base.map((i) => ({ ...i }));
-  for (const item of extra) {
-    const existing = merged.find((i) => i._id === item._id);
-    if (existing) {
-      existing.qty = Math.min(existing.qty + item.qty, existing.stock);
-    } else {
-      merged.push({ ...item });
-    }
-  }
-  return merged;
-};
-
 export function CartProvider({ children }) {
   const { user } = useAuth();
-  const key = user ? `cart_${user._id}` : GUEST_KEY;
+  const key = user ? `cart_${user._id}` : null;
 
   const [state, setState] = useState(() => ({ key, items: readCart(key) }));
 
-  // Switch carts when someone logs in or out
+  // Load the right cart when someone logs in or out
   useEffect(() => {
-    if (state.key === key) return;
-
-    let next = readCart(key);
-    // Items added while logged out are carried into the new user's cart
-    if (state.key === GUEST_KEY && user) {
-      next = mergeCarts(next, state.items);
-      localStorage.removeItem(GUEST_KEY);
-    }
-    setState({ key, items: next });
+    if (state.key !== key) setState({ key, items: readCart(key) });
   }, [key]);
 
-  // Save the cart whenever it changes
+  // Save the cart whenever it changes (only for logged-in users)
   useEffect(() => {
-    localStorage.setItem(state.key, JSON.stringify(state.items));
+    if (state.key) localStorage.setItem(state.key, JSON.stringify(state.items));
   }, [state]);
 
   const items = state.items;
@@ -59,7 +36,9 @@ export function CartProvider({ children }) {
       items: typeof updater === "function" ? updater(prev.items) : updater,
     }));
 
+  // Returns false if nobody is logged in
   const addToCart = (product, qty = 1) => {
+    if (!user) return false;
     setItems((prev) => {
       const existing = prev.find((i) => i._id === product._id);
       if (existing) {
@@ -79,6 +58,7 @@ export function CartProvider({ children }) {
         },
       ];
     });
+    return true;
   };
 
   const updateQty = (id, qty) =>

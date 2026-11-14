@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../services/api";
+import { imageUrl } from "../../utils/imageUrl";
+
+const MAX_IMAGES = 5;
 
 const emptyForm = {
   name: "",
@@ -10,7 +13,6 @@ const emptyForm = {
   price: "",
   stock: "",
   description: "",
-  images: "",
 };
 
 export default function AdminProductForm() {
@@ -19,14 +21,18 @@ export default function AdminProductForm() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState(emptyForm);
+  const [images, setImages] = useState([]);
   const [compat, setCompat] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [vehicles, setVehicles] = useState({ makes: [], models: {} });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api.get("/products/categories").then(({ data }) => setCategories(data)).catch(() => {});
+    api.get("/products/vehicles").then(({ data }) => setVehicles(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -42,8 +48,8 @@ export default function AdminProductForm() {
           price: data.price,
           stock: data.stock,
           description: data.description || "",
-          images: (data.images || []).join("\n"),
         });
+        setImages(data.images || []);
         setCompat(
           (data.compatibility || []).map((c) => ({
             make: c.make || "",
@@ -59,6 +65,36 @@ export default function AdminProductForm() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  // ---- images ----
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files);
+    e.target.value = ""; // lets you pick the same file again later
+    if (files.length === 0) return;
+
+    if (images.length + files.length > MAX_IMAGES) {
+      setError(`A product can have at most ${MAX_IMAGES} images`);
+      return;
+    }
+
+    setError("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append("images", f));
+      const { data } = await api.post("/uploads", fd);
+      setImages((prev) => [...prev, ...data.urls]);
+    } catch (err) {
+      setError(err.response?.data?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImage = (index) => setImages((prev) => prev.filter((_, i) => i !== index));
+  const makeMain = (index) =>
+    setImages((prev) => [prev[index], ...prev.filter((_, i) => i !== index)]);
+
+  // ---- compatibility ----
   const updateCompat = (index, field, value) =>
     setCompat((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   const addCompat = () =>
@@ -78,7 +114,7 @@ export default function AdminProductForm() {
       price: Number(form.price),
       stock: Number(form.stock),
       description: form.description,
-      images: form.images.split("\n").map((s) => s.trim()).filter(Boolean),
+      images,
       compatibility: compat
         .filter((c) => c.make.trim())
         .map((c) => ({
@@ -102,6 +138,8 @@ export default function AdminProductForm() {
   };
 
   if (loading) return <p>Loading...</p>;
+
+  const allModels = [...new Set(Object.values(vehicles.models).flat())].sort();
 
   return (
     <div>
@@ -129,16 +167,56 @@ export default function AdminProductForm() {
         <textarea name="description" placeholder="Description" rows={3}
           value={form.description} onChange={handleChange} />
 
-        <textarea name="images" rows={3}
-          placeholder={"Image URLs, one per line\nhttps://example.com/part1.jpg"}
-          value={form.images} onChange={handleChange} />
+        <h3>Images</h3>
+        <div className="image-manager">
+          {images.map((src, i) => (
+            <div className="image-tile" key={src}>
+              <img src={imageUrl(src)} alt={`Product ${i + 1}`} />
+              <div className="image-tile-actions">
+                {i === 0 ? (
+                  <span className="main-tag">Main</span>
+                ) : (
+                  <button type="button" className="link-btn" onClick={() => makeMain(i)}>
+                    Make main
+                  </button>
+                )}
+                <button type="button" className="link-btn danger-text" onClick={() => removeImage(i)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {images.length < MAX_IMAGES && (
+            <label className="image-add">
+              {uploading ? "Uploading..." : "+ Add images"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                hidden
+                onChange={handleFiles}
+                disabled={uploading}
+              />
+            </label>
+          )}
+        </div>
+        <p className="muted">
+          Up to {MAX_IMAGES} images (JPG, PNG or WebP, 5MB each). The first image is the main one.
+        </p>
 
         <h3>Compatibility</h3>
+        <datalist id="make-list">
+          {vehicles.makes.map((m) => <option key={m} value={m} />)}
+        </datalist>
+        <datalist id="model-list">
+          {allModels.map((m) => <option key={m} value={m} />)}
+        </datalist>
         {compat.map((c, i) => (
           <div className="compat-row" key={i}>
-            <input placeholder="Make (e.g. Toyota)" value={c.make}
+            <input placeholder="Make (e.g. Toyota)" list="make-list" value={c.make}
               onChange={(e) => updateCompat(i, "make", e.target.value)} />
-            <input placeholder="Model (e.g. Corolla)" value={c.model}
+            <input placeholder="Model (e.g. Corolla)" list="model-list" value={c.model}
               onChange={(e) => updateCompat(i, "model", e.target.value)} />
             <input type="number" placeholder="From year" value={c.yearFrom}
               onChange={(e) => updateCompat(i, "yearFrom", e.target.value)} />
@@ -154,7 +232,7 @@ export default function AdminProductForm() {
         </button>
 
         {error && <p className="error">{error}</p>}
-        <button className="btn" disabled={saving}>
+        <button className="btn" disabled={saving || uploading}>
           {saving ? "Saving..." : isEdit ? "Save changes" : "Create product"}
         </button>
       </form>
