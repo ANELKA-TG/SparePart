@@ -1,5 +1,5 @@
 :root {
-  --bg: #f4f5f7;
+ --bg: #eef2f7;
   --surface: #ffffff;
   --text: #1f2937;
   --muted: #6b7280;
@@ -20,7 +20,8 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+   background: var(--bg) url("/pattern.svg") repeat;
+  background-size: 300px 300px;
   color: var(--text);
   line-height: 1.5;
 }
@@ -420,6 +421,10 @@ select:disabled { background-color: #f3f4f6; color: #9ca3af; cursor: not-allowed
   .cart-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
   .line-total { text-align: left; min-width: 0; }
   .order-row, .admin-order summary { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+@media (max-width: 760px) {
+  body { background-size: 240px 240px; }
 }
 
 @media (max-width: 420px) {
