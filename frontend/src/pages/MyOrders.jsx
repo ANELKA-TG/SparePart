@@ -21,7 +21,7 @@ export default function MyOrders() {
       {orders.map((o) => (
         <Link to={`/orders/${o._id}`} className="order-row" key={o._id}>
           <div>
-            <strong>Order #{o._id.slice(-6).toUpperCase()}</strong> // takes the last 6 characters of the string
+            <strong>Order #{o._id.slice(-6).toUpperCase()}</strong> {/* takes the last 6 characters of the string */} 
             <span className="muted">
               {new Date(o.createdAt).toLocaleDateString()} · {o.items.length} item(s)
             </span>
