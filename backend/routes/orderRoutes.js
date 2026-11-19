@@ -9,8 +9,12 @@ const {
   updateOrderStatus,
 } = require("../controllers/orderController");
 const { protect, adminOnly } = require("../middleware/auth");
+const { validateOrder } = require("../middleware/validate");
 
-router.route("/").post(protect, createOrder).get(protect, adminOnly, getAllOrders);
+router
+  .route("/")
+  .post(protect, validateOrder, createOrder)
+  .get(protect, adminOnly, getAllOrders);
 router.get("/my", protect, getMyOrders); // must stay above "/:id"
 router.get("/:id", protect, getOrderById);
 router.put("/:id/cancel", protect, cancelOrder);

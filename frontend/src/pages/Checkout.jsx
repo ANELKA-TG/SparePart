@@ -1,43 +1,30 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import useForm from "../hooks/useForm";
+import Field from "../components/Field";
+import { validateCheckout } from "../utils/validators";
 
 export default function Checkout() {
   const { user } = useAuth();
   const { items, totalPrice, clearCart } = useCart();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({
-    fullName: user?.name || "",
-    phone: "",
-    city: "",
-    address: "",
-    notes: "",
+  const { values, errors, handleChange, handleBlur, handleSubmit, submitting, formError } =
+    useForm(
+      { fullName: user?.name || "", phone: "", city: "", address: "", notes: "" },
+      validateCheckout
+    );
+
+  const onSubmit = handleSubmit(async (form) => {
+    const { data } = await api.post("/orders", {
+      items: items.map((i) => ({ product: i._id, qty: i.qty })),
+      shippingInfo: form,
+    });
+    clearCart();
+    navigate(`/orders/${data._id}`, { replace: true });
   });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const { data } = await api.post("/orders", {
-        items: items.map((i) => ({ product: i._id, qty: i.qty })),
-        shippingInfo: form,
-      });
-      clearCart();
-      navigate(`/orders/${data._id}`, { replace: true });
-    } catch (err) {
-      setError(err.response?.data?.message || "Could not place order");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (items.length === 0)
     return (
@@ -47,29 +34,52 @@ export default function Checkout() {
       </div>
     );
 
+  const field = (name) => ({
+    name,
+    value: values[name],
+    onChange: handleChange,
+    onBlur: handleBlur,
+    "aria-invalid": !!errors[name],
+  });
+
   return (
     <div className="container">
       <h1>Checkout</h1>
       <div className="checkout-grid">
-        <form onSubmit={handleSubmit} className="form">
+        <form onSubmit={onSubmit} className="form" noValidate>
           <h3>Delivery details</h3>
-          <input name="fullName" placeholder="Full name" value={form.fullName}
-            onChange={handleChange} required />
-          <input name="phone" placeholder="Phone number" value={form.phone}
-            onChange={handleChange} required />
-          <input name="city" placeholder="City" value={form.city}
-            onChange={handleChange} required />
-          <input name="address" placeholder="Delivery address / neighbourhood"
-            value={form.address} onChange={handleChange} required />
-          <textarea name="notes" placeholder="Notes (optional)" value={form.notes}
-            onChange={handleChange} rows={3} />
+
+          <Field label="Full name" error={errors.fullName}>
+            <input {...field("fullName")} autoComplete="name" />
+          </Field>
+
+          <Field
+            label="Phone number"
+            error={errors.phone}
+            hint="The courier will call this number. e.g. 6XX XX XX XX"
+          >
+            <input {...field("phone")} type="tel" inputMode="tel" autoComplete="tel" />
+          </Field>
+
+          <Field label="City" error={errors.city}>
+            <input {...field("city")} autoComplete="address-level2" />
+          </Field>
+
+          <Field label="Delivery address / neighbourhood" error={errors.address}>
+            <input {...field("address")} autoComplete="street-address" />
+          </Field>
+
+          <Field label="Notes (optional)" error={errors.notes}>
+            <textarea {...field("notes")} rows={3} maxLength={300} />
+          </Field>
 
           <h3>Payment</h3>
-          <p className="pay-box"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24px" width="24px" fill="#000000"><path d="M5,19V5Q5,5 5,6.11Q5,7.22 5,9v6q0,1.77 0,2.89T5,19Zm0,2q-0.83,0-1.41-0.59T3,19V5Q3,4.17 3.59,3.59T5,3H19q0.83,0 1.41,0.59T21,5V7.5H19V5H5V19H19V16.5h2V19q0,0.82-0.59,1.41T19,21H5Zm8-4q-0.82,0-1.41-0.59T11,15V9q0-0.83 0.59-1.41T13,7h7q0.83,0 1.41,0.59T22,9v6q0,0.82-0.59,1.41T20,17H13Zm7-2V9H13v6h7Zm-2.94-1.94Q17.5,12.63 17.5,12t-0.44-1.06T16,10.5t-1.06,0.44T14.5,12t0.44,1.06T16,13.5t1.06-0.44Z"/></svg> Cash on delivery: you pay when you receive your parts.</p>
+          <p className="pay-box">Cash on delivery: you pay when you receive your parts.</p>
 
-          {error && <p className="error">{error}</p>}
-          <button className="btn" disabled={loading}>
-            {loading ? "Placing order..." : "Place order"}
+          {errors.items && <p className="error" role="alert">{errors.items}</p>}
+          {formError && <p className="error" role="alert">{formError}</p>}
+          <button className="btn" disabled={submitting}>
+            {submitting ? "Placing order..." : "Place order"}
           </button>
         </form>
 

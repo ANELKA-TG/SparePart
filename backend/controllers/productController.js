@@ -2,6 +2,16 @@ const Product = require("../models/Product");
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Part numbers are unique: turn Mongo's duplicate-key error into a field error
+const sendProductError = (res, err) => {
+  if (err.code === 11000)
+    return res.status(409).json({
+      message: "A product with this part number already exists",
+      errors: { partNumber: "A product with this part number already exists" },
+    });
+  res.status(400).json({ message: err.message });
+};
+
 const SORTS = {
   newest: { createdAt: -1 },
   price_asc: { price: 1 },
@@ -121,7 +131,7 @@ exports.createProduct = async (req, res) => {
     const product = await Product.create(req.body);
     res.status(201).json(product);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    sendProductError(res, err);
   }
 };
 
@@ -135,10 +145,9 @@ exports.updateProduct = async (req, res) => {
     if (!product) return res.status(404).json({ message: "Product not found" });
     res.json(product);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    sendProductError(res, err);
   }
 };
-
 // DELETE /api/products/:id
 exports.deleteProduct = async (req, res) => {
   try {

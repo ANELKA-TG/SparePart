@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import api from "../../services/api";
 import { imageUrl } from "../../utils/imageUrl";
+import useForm from "../../hooks/useForm";
+import Field from "../../components/Field";
+import { isBlankVehicle, validateProduct } from "../../utils/validators";
 
 const MAX_IMAGES = 5;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-const emptyForm = {
+const emptyValues = {
   name: "",
   partNumber: "",
   category: "",
@@ -13,6 +18,8 @@ const emptyForm = {
   price: "",
   stock: "",
   description: "",
+  images: [],
+  compatibility: [],
 };
 
 export default function AdminProductForm() {
@@ -20,15 +27,15 @@ export default function AdminProductForm() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
 
-  const [form, setForm] = useState(emptyForm);
-  const [images, setImages] = useState([]);
-  const [compat, setCompat] = useState([]);
+  const { values, setValues, errors, handleChange, handleBlur, handleSubmit, submitting, formError } =
+    useForm(emptyValues, validateProduct);
+
   const [categories, setCategories] = useState([]);
   const [vehicles, setVehicles] = useState({ makes: [], models: {} });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(isEdit);
-  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     api.get("/products/categories").then(({ data }) => setCategories(data)).catch(() => {});
@@ -40,200 +47,276 @@ export default function AdminProductForm() {
     api
       .get(`/products/${id}`)
       .then(({ data }) => {
-        setForm({
+        setValues({
           name: data.name,
           partNumber: data.partNumber,
           category: data.category,
           brand: data.brand || "",
-          price: data.price,
-          stock: data.stock,
+          price: String(data.price),
+          stock: String(data.stock),
           description: data.description || "",
-        });
-        setImages(data.images || []);
-        setCompat(
-          (data.compatibility || []).map((c) => ({
+          images: data.images || [],
+          compatibility: (data.compatibility || []).map((c) => ({
             make: c.make || "",
             model: c.model || "",
             yearFrom: c.yearFrom ?? "",
             yearTo: c.yearTo ?? "",
-          }))
-        );
+          })),
+        });
       })
-      .catch(() => setError("Product not found"))
+      .catch(() => setLoadError("Product not found"))
       .finally(() => setLoading(false));
   }, [id, isEdit]);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  // ---- images ----
+  // ---------- images ----------
   const handleFiles = async (e) => {
     const files = Array.from(e.target.files);
     e.target.value = ""; // lets you pick the same file again later
     if (files.length === 0) return;
+    setUploadError("");
 
-    if (images.length + files.length > MAX_IMAGES) {
-      setError(`A product can have at most ${MAX_IMAGES} images`);
+    if (values.images.length + files.length > MAX_IMAGES) {
+      setUploadError(`A product can have at most ${MAX_IMAGES} images`);
       return;
     }
+    for (const f of files) {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        setUploadError(`"${f.name}" is not a JPG, PNG or WebP image`);
+        return;
+      }
+      if (f.size > MAX_IMAGE_SIZE) {
+        setUploadError(`"${f.name}" is larger than 5MB`);
+        return;
+      }
+    }
 
-    setError("");
     setUploading(true);
     try {
       const fd = new FormData();
       files.forEach((f) => fd.append("images", f));
       const { data } = await api.post("/uploads", fd);
-      setImages((prev) => [...prev, ...data.urls]);
+      setValues((v) => ({ ...v, images: [...v.images, ...data.urls] }));
     } catch (err) {
-      setError(err.response?.data?.message || "Upload failed");
+      setUploadError(err.response?.data?.message || "Upload failed");
     } finally {
       setUploading(false);
     }
   };
 
-  const removeImage = (index) => setImages((prev) => prev.filter((_, i) => i !== index));
+  const removeImage = (index) =>
+    setValues((v) => ({ ...v, images: v.images.filter((_, i) => i !== index) }));
   const makeMain = (index) =>
-    setImages((prev) => [prev[index], ...prev.filter((_, i) => i !== index)]);
+    setValues((v) => ({
+      ...v,
+      images: [v.images[index], ...v.images.filter((_, i) => i !== index)],
+    }));
 
-  // ---- compatibility ----
-  const updateCompat = (index, field, value) =>
-    setCompat((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
-  const addCompat = () =>
-    setCompat((prev) => [...prev, { make: "", model: "", yearFrom: "", yearTo: "" }]);
-  const removeCompat = (index) => setCompat((prev) => prev.filter((_, i) => i !== index));
+  // ---------- compatible vehicles ----------
+  const updateVehicle = (index, field, value) =>
+    setValues((v) => ({
+      ...v,
+      compatibility: v.compatibility.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    }));
+  const addVehicle = () =>
+    setValues((v) => ({
+      ...v,
+      compatibility: [...v.compatibility, { make: "", model: "", yearFrom: "", yearTo: "" }],
+    }));
+  const removeVehicle = (index) =>
+    setValues((v) => ({ ...v, compatibility: v.compatibility.filter((_, i) => i !== index) }));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSaving(true);
-
+  // ---------- submit ----------
+  const onSubmit = handleSubmit(async (v) => {
     const payload = {
-      name: form.name,
-      partNumber: form.partNumber,
-      category: form.category,
-      brand: form.brand,
-      price: Number(form.price),
-      stock: Number(form.stock),
-      description: form.description,
-      images,
-      compatibility: compat
-        .filter((c) => c.make.trim())
+      name: v.name.trim(),
+      partNumber: v.partNumber.trim(),
+      category: v.category.trim(),
+      brand: v.brand.trim(),
+      price: Number(v.price),
+      stock: Number(v.stock),
+      description: v.description.trim(),
+      images: v.images,
+      compatibility: v.compatibility
+        .filter((c) => !isBlankVehicle(c))
         .map((c) => ({
           make: c.make.trim(),
           model: c.model.trim(),
-          yearFrom: c.yearFrom === "" ? undefined : Number(c.yearFrom),
-          yearTo: c.yearTo === "" ? undefined : Number(c.yearTo),
+          yearFrom: String(c.yearFrom).trim() === "" ? undefined : Number(c.yearFrom),
+          yearTo: String(c.yearTo).trim() === "" ? undefined : Number(c.yearTo),
         })),
     };
 
-    try {
-      if (isEdit) await api.put(`/products/${id}`, payload);
-      else await api.post("/products", payload);
-      navigate("/admin/products");
-    } catch (err) {
-      const msg = err.response?.data?.message || "Could not save product";
-      setError(msg.includes("E11000") ? "A product with this part number already exists" : msg);
-    } finally {
-      setSaving(false);
-    }
-  };
+    if (isEdit) await api.put(`/products/${id}`, payload);
+    else await api.post("/products", payload);
+    navigate("/admin/products");
+  });
 
   if (loading) return <p>Loading...</p>;
+  if (loadError)
+    return (
+      <div>
+        <Link to="/admin/products"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24px" width="24px" fill="#000000"><path d="M10,18L4,12l6-6l1.4,1.45L7.85,11H20v2H7.85l3.55,3.55L10,18Z"/></svg> Back to products</Link>
+        <p className="error">{loadError}</p>
+      </div>
+    );
+
+  const field = (name) => ({
+    name,
+    value: values[name],
+    onChange: handleChange,
+    onBlur: handleBlur,
+    "aria-invalid": !!errors[name],
+  });
 
   const allModels = [...new Set(Object.values(vehicles.models).flat())].sort();
+  const compatError = errors.compatibility;
+  const rowErrors = compatError && typeof compatError === "object" ? compatError : {};
+  const compatMessage = typeof compatError === "string" ? compatError : "";
+  const imageMessage = errors.images || uploadError;
 
   return (
     <div>
       <Link to="/admin/products"> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24px" width="24px" fill="#000000"><path d="M10,18L4,12l6-6l1.4,1.45L7.85,11H20v2H7.85l3.55,3.55L10,18Z"/></svg> Back to products</Link>
       <h2>{isEdit ? "Edit product" : "Add product"}</h2>
 
-      <form onSubmit={handleSubmit} className="form wide">
+      <form onSubmit={onSubmit} className="form wide" noValidate>
         <div className="grid-2">
-          <input name="name" placeholder="Product name" value={form.name}
-            onChange={handleChange} required />
-          <input name="partNumber" placeholder="Part number" value={form.partNumber}
-            onChange={handleChange} required />
-          <input name="category" placeholder="Category" list="category-list"
-            value={form.category} onChange={handleChange} required />
+          <Field label="Product name" error={errors.name}>
+            <input {...field("name")} />
+          </Field>
+          <Field label="Part number" error={errors.partNumber} hint="Must be unique">
+            <input {...field("partNumber")} />
+          </Field>
+          <Field label="Category" error={errors.category}>
+            <input {...field("category")} list="category-list" />
+          </Field>
           <datalist id="category-list">
             {categories.map((c) => <option key={c} value={c} />)}
           </datalist>
-          <input name="brand" placeholder="Brand" value={form.brand} onChange={handleChange} />
-          <input name="price" type="number" min="0" placeholder="Price (FCFA)"
-            value={form.price} onChange={handleChange} required />
-          <input name="stock" type="number" min="0" placeholder="Stock quantity"
-            value={form.stock} onChange={handleChange} required />
+          <Field label="Brand (optional)" error={errors.brand}>
+            <input {...field("brand")} />
+          </Field>
+          <Field label="Price (FCFA)" error={errors.price}>
+            <input {...field("price")} type="number" min="0" step="1" inputMode="numeric" />
+          </Field>
+          <Field label="Stock quantity" error={errors.stock}>
+            <input {...field("stock")} type="number" min="0" step="1" inputMode="numeric" />
+          </Field>
         </div>
 
-        <textarea name="description" placeholder="Description" rows={3}
-          value={form.description} onChange={handleChange} />
+        <Field
+          label="Description (optional)"
+          error={errors.description}
+          hint={`${values.description.length}/2000`}
+        >
+          <textarea {...field("description")} rows={3} />
+        </Field>
 
-        <h3>Images</h3>
-        <div className="image-manager">
-          {images.map((src, i) => (
-            <div className="image-tile" key={src}>
-              <img src={imageUrl(src)} alt={`Product ${i + 1}`} />
-              <div className="image-tile-actions">
-                {i === 0 ? (
-                  <span className="main-tag">Main</span>
-                ) : (
-                  <button type="button" className="link-btn" onClick={() => makeMain(i)}>
-                    Make main
+        <div id="images">
+          <h3>Images</h3>
+          <div className="image-manager">
+            {values.images.map((src, i) => (
+              <div className="image-tile" key={src}>
+                <img src={imageUrl(src)} alt={`Product ${i + 1}`} />
+                <div className="image-tile-actions">
+                  {i === 0 ? (
+                    <span className="main-tag">Main</span>
+                  ) : (
+                    <button type="button" className="link-btn" onClick={() => makeMain(i)}>
+                      Make main
+                    </button>
+                  )}
+                  <button type="button" className="link-btn danger-text" onClick={() => removeImage(i)}>
+                    Remove
                   </button>
-                )}
-                <button type="button" className="link-btn danger-text" onClick={() => removeImage(i)}>
-                  Remove
-                </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {images.length < MAX_IMAGES && (
-            <label className="image-add">
-              {uploading ? "Uploading..." : "+ Add images"}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                hidden
-                onChange={handleFiles}
-                disabled={uploading}
-              />
-            </label>
-          )}
-        </div>
-        <p className="muted">
-          Up to {MAX_IMAGES} images (JPG, PNG or WebP, 5MB each). The first image is the main one.
-        </p>
-
-        <h3>Compatibility</h3>
-        <datalist id="make-list">
-          {vehicles.makes.map((m) => <option key={m} value={m} />)}
-        </datalist>
-        <datalist id="model-list">
-          {allModels.map((m) => <option key={m} value={m} />)}
-        </datalist>
-        {compat.map((c, i) => (
-          <div className="compat-row" key={i}>
-            <input placeholder="Make (e.g. Toyota)" list="make-list" value={c.make}
-              onChange={(e) => updateCompat(i, "make", e.target.value)} />
-            <input placeholder="Model (e.g. Corolla)" list="model-list" value={c.model}
-              onChange={(e) => updateCompat(i, "model", e.target.value)} />
-            <input type="number" placeholder="From year" value={c.yearFrom}
-              onChange={(e) => updateCompat(i, "yearFrom", e.target.value)} />
-            <input type="number" placeholder="To year" value={c.yearTo}
-              onChange={(e) => updateCompat(i, "yearTo", e.target.value)} />
-            <button type="button" className="link-btn danger-text" onClick={() => removeCompat(i)}>
-              Remove
-            </button>
+            {values.images.length < MAX_IMAGES && (
+              <label className="image-add">
+                {uploading ? "Uploading..." : "+ Add images"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  hidden
+                  onChange={handleFiles}
+                  disabled={uploading}
+                />
+              </label>
+            )}
           </div>
-        ))}
-        <button type="button" className="btn secondary" onClick={addCompat}>
-          + Add compatible vehicle
-        </button>
+          <p className="muted">
+            Up to {MAX_IMAGES} images (JPG, PNG or WebP, 5MB each). The first image is the main one.
+          </p>
+          {imageMessage && <p className="field-error" role="alert">{imageMessage}</p>}
+        </div>
 
-        {error && <p className="error">{error}</p>}
-        <button className="btn" disabled={saving || uploading}>
-          {saving ? "Saving..." : isEdit ? "Save changes" : "Create product"}
+        <div id="compatibility">
+          <h3>Compatibility</h3>
+          <datalist id="make-list">
+            {vehicles.makes.map((m) => <option key={m} value={m} />)}
+          </datalist>
+          <datalist id="model-list">
+            {allModels.map((m) => <option key={m} value={m} />)}
+          </datalist>
+
+          {values.compatibility.map((c, i) => {
+            const re = rowErrors[i] || {};
+            return (
+              <div className="compat-item" key={i}>
+                <div className="compat-row">
+                  <input
+                    className={re.make ? "invalid" : ""}
+                    placeholder="Make (e.g. Toyota)"
+                    list="make-list"
+                    value={c.make}
+                    onChange={(e) => updateVehicle(i, "make", e.target.value)}
+                  />
+                  <input
+                    className={re.model ? "invalid" : ""}
+                    placeholder="Model (e.g. Corolla)"
+                    list="model-list"
+                    value={c.model}
+                    onChange={(e) => updateVehicle(i, "model", e.target.value)}
+                  />
+                  <input
+                    className={re.yearFrom ? "invalid" : ""}
+                    type="number"
+                    placeholder="From year"
+                    value={c.yearFrom}
+                    onChange={(e) => updateVehicle(i, "yearFrom", e.target.value)}
+                  />
+                  <input
+                    className={re.yearTo ? "invalid" : ""}
+                    type="number"
+                    placeholder="To year"
+                    value={c.yearTo}
+                    onChange={(e) => updateVehicle(i, "yearTo", e.target.value)}
+                  />
+                  <button type="button" className="link-btn danger-text" onClick={() => removeVehicle(i)}>
+                    Remove
+                  </button>
+                </div>
+                {Object.keys(re).length > 0 && (
+                  <p className="field-error" role="alert">
+                    Vehicle {i + 1}: {Object.values(re)[0]}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+
+          <button type="button" className="btn secondary" onClick={addVehicle}>
+            + Add compatible vehicle
+          </button>
+          {compatMessage && <p className="field-error" role="alert">{compatMessage}</p>}
+        </div>
+
+        {formError && <p className="error" role="alert">{formError}</p>}
+        <button className="btn" disabled={submitting || uploading}>
+          {submitting ? "Saving..." : isEdit ? "Save changes" : "Create product"}
         </button>
       </form>
     </div>

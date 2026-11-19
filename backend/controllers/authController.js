@@ -12,25 +12,29 @@ const userResponse = (user) => ({
   token: signToken(user._id),
 });
 
-// POST /api/auth/register
+const emailTaken = (res) =>
+  res.status(409).json({
+    message: "This email is already registered",
+    errors: { email: "This email is already registered" },
+  });
+
+// POST /api/auth/register  (input already validated and cleaned)
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password)
-      return res.status(400).json({ message: "All fields are required" });
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ message: "Email already registered" });
+    if (await User.findOne({ email })) return emailTaken(res);
 
     // role is never taken from the request, so nobody can register as admin
     const user = await User.create({ name, email, password });
     res.status(201).json(userResponse(user));
   } catch (err) {
+    if (err.code === 11000) return emailTaken(res); // two sign-ups at the same moment
     res.status(400).json({ message: err.message });
   }
 };
 
-// POST /api/auth/login
+// POST /api/auth/login  (input already validated and cleaned)
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;

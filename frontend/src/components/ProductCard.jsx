@@ -52,7 +52,7 @@ export default function ProductCard({ product }) {
         <div className="card-actions">
           <Link to={link} className="btn outline">Details</Link>
           <button className="btn" disabled={out} onClick={handleAdd}>
-            {added ? "Added ✓" : <><CartIcon size={16} /> Add</>}
+            {added ? "Added !!": <><CartIcon size={16} /> Add</>}
           </button>
         </div>
       </div>

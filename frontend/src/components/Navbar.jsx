@@ -37,7 +37,7 @@ export default function Navbar() {
       <div className="nav-inner">
         <Link to="/" className="brand" onClick={close}>
           <span className="brand-mark"><WrenchIcon size={18} /></span>
-          <span>Spare<em>Part</em></span>
+          <span>TOR<em>QUE</em></span>
         </Link>
 
         <form className="nav-search" onSubmit={submitSearch} role="search">
