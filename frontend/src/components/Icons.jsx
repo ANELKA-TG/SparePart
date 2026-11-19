@@ -24,13 +24,6 @@ export const CartIcon = (p) => (
     <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
   </Svg>
 );
-
-export const TickIcon = (p) => (
-  <Svg {...p}>
-    <path d="m5 12 4 4L19 6" />
-  </Svg>
-);
-
 export const UserIcon = (p) => (
   <Svg {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Svg>
 );
